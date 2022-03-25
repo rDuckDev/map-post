@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html class="vh-100" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootswatch@5.1.3/dist/lumen/bootstrap.min.css"
+      integrity="sha256-27KHRZR9ihYCkP9BSm5cLLqJ4LsSZdLEYgKh5j2lrCs="
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.css"
+      integrity="sha256-BPfK9M5v34c2XP6p0cxVz1mUQLst0gTLk0mlc7kuodA="
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css"
+      integrity="sha256-DfWjNxDkM94fVBWx1H5BMMp0Zq7luBlV8QRcSES7s+0="
+      crossorigin="anonymous"
+    />
+    <style>
+      #output-modal {
+        z-index: 2000;
+      }
+      #button-overlay {
+        z-index: 1000;
+        position: absolute;
+        bottom: 0;
+        right: 0;
+      }
+    </style>
+
+    <title>MaPost</title>
+  </head>
+
+  <body class="vh-100 d-flex flex-column">
+    <nav class="navbar navbar-dark bg-dark">
+      <section class="container-fluid">
+        <span class="navbar-brand">
+          <i class="fa-solid fa-map-location-dot me-2"></i>
+          MaPost
+        </span>
+      </section>
+    </nav>
+
+    <main class="flex-fill d-flex container-fluid p-0">
+      <section id="output-modal" class="modal fade">
+        <section class="modal-dialog modal-fullscreen">
+          <section class="modal-content">
+            <section class="modal-header">
+              <section class="modal-title">Sign post data</section>
+              <button class="btn-close" data-bs-dismiss="modal"></button>
+            </section>
+            <section class="modal-body">
+              <textarea id="output" class="form-control h-100 w-100"></textarea>
+            </section>
+          </section>
+        </section>
+      </section>
+      <section id="map" class="flex-fill"></section>
+      <section
+        id="button-overlay"
+        class="d-flex flex-column text-end mb-4 me-3"
+      >
+        <button
+          id="print"
+          class="btn btn-sm btn-dark mb-3"
+          data-bs-toggle="modal"
+          data-bs-target="#output-modal"
+        >
+          <span class="me-2">Print</span>
+          <i class="fa-solid fa-code fa-fw"></i>
+        </button>
+        <button id="post" class="btn btn-primary">
+          <span class="me-2">Add</span>
+          <i class="fa-solid fa-signs-post fa-fw"></i>
+        </button>
+      </section>
+    </main>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha256-9SEPo+fwJFpMUet/KACSwO+Z/dKMReF9q4zFhU/fT9M="
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.js"
+      integrity="sha256-yDc0eil8GjWFKqN1OSzHSVCiuGghTosZCcRje4tj7iQ="
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var DOM = {};
+        var OSM = {};
+        var Data = {};
+
+        DOM.post = document.querySelector("#post");
+        DOM.print = document.querySelector("#print");
+        DOM.output = document.querySelector("#output");
+
+        OSM.view = undefined;
+        OSM.playerMarker = undefined;
+        // HT: https://stackoverflow.com/questions/52136700/how-to-use-font-awesome-as-an-icon-in-leaflet-instead-of-marker
+        OSM.iconPlayer = L.divIcon({
+          html: "<i class='fa-solid fa-street-view fa-3x text-dark'></i>",
+          className: "",
+        });
+        OSM.iconPost = L.divIcon({
+          html: "<i class='fa-solid fa-signs-post fa-2x text-warning'></i>",
+          className: "",
+        });
+
+        Data.coords = undefined;
+        Data.posts = [];
+
+        function bindLocation() {
+          // early return if the browser does not support geolocation
+          if (!navigator.geolocation) return alert("Location is unsupported.");
+
+          // otherwise, start watching for the player position
+          navigator.geolocation.watchPosition(
+            function (position) {
+              // cache the current location every time it updates
+              Data.coords = position.coords;
+              // bind the map and player on first run
+              if (!OSM.view) {
+                bindMap();
+                bindPlayer();
+              }
+              updateLocation();
+            },
+            function (error) {
+              // inform the user that their location is inaccessible
+              alert(error.message);
+            },
+            { enableHighAccuracy: true }
+          );
+        }
+
+        function bindMap() {
+          var zoom = 16;
+
+          // bind a map to the page
+          OSM.view = L.map("map", { preferCanvas: true }).setView(
+            [Data.coords.latitude, Data.coords.longitude],
+            zoom
+          );
+
+          // render a map using OSM tiles
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution:
+              "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors",
+          }).addTo(OSM.view);
+        }
+
+        function bindPlayer() {
+          // render the player on the map
+          OSM.playerMarker = L.marker(
+            [Data.coords.latitude, Data.coords.longitude],
+            { icon: OSM.iconPlayer }
+          ).addTo(OSM.view);
+        }
+
+        function updateLocation() {
+          // render the player at an updated location
+          OSM.playerMarker.setLatLng([
+            Data.coords.latitude,
+            Data.coords.longitude,
+          ]);
+        }
+
+        function createPost(event) {
+          event.preventDefault();
+
+          console.log("here");
+
+          // create a new post
+          var post = {
+            title: "",
+            // cache the location before it changes
+            latitude: Data.coords.latitude,
+            longitude: Data.coords.longitude,
+          };
+          // prompt the user for a post title
+          var defaultTitle = "Post " + Date.now();
+          post.title = prompt("Sign post name", defaultTitle) || defaultTitle;
+
+          // preserve the post in memory
+          Data.posts.push(post);
+
+          // render the post on the map
+          L.marker([post.latitude, post.longitude], {
+            icon: OSM.iconPost,
+          })
+            .addTo(OSM.view)
+            .bindPopup(
+              "<strong>" +
+                post.title +
+                "</strong><br>" +
+                "[" +
+                post.latitude +
+                ", " +
+                post.longitude +
+                "]"
+            );
+        }
+
+        function printPosts(event) {
+          // print the JSON as-is with 2 spaces of indentation
+          DOM.output.value = JSON.stringify(Data.posts, null, 2);
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+          // !WARNING! binding location also binds the map and player
+          // bind a location watcher to the window
+          bindLocation();
+
+          DOM.post.addEventListener("click", createPost);
+          DOM.print.addEventListener("click", printPosts);
+        });
+      })();
+    </script>
+  </body>
+</html>
