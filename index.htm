@@ -23,10 +23,10 @@
       crossorigin="anonymous"
     />
     <style>
-      #output-modal {
+      #modal-output {
         z-index: 2000;
       }
-      #button-overlay {
+      #overlay-buttons {
         z-index: 1000;
         position: absolute;
         bottom: 0;
@@ -34,7 +34,7 @@
       }
     </style>
 
-    <title>MaPost</title>
+    <title>Map Post</title>
   </head>
 
   <body class="vh-100 d-flex flex-column">
@@ -42,13 +42,13 @@
       <section class="container-fluid">
         <span class="navbar-brand">
           <i class="fa-solid fa-map-location-dot me-2"></i>
-          MaPost
+          Map Post
         </span>
       </section>
     </nav>
 
     <main class="flex-fill d-flex container-fluid p-0">
-      <section id="output-modal" class="modal fade">
+      <section id="modal-output" class="modal fade">
         <section class="modal-dialog modal-fullscreen">
           <section class="modal-content">
             <section class="modal-header">
@@ -63,14 +63,14 @@
       </section>
       <section id="map" class="flex-fill"></section>
       <section
-        id="button-overlay"
+        id="overlay-buttons"
         class="d-flex flex-column text-end mb-4 me-3"
       >
         <button
           id="print"
           class="btn btn-sm btn-dark mb-3"
           data-bs-toggle="modal"
-          data-bs-target="#output-modal"
+          data-bs-target="#modal-output"
         >
           <span class="me-2">Print</span>
           <i class="fa-solid fa-code fa-fw"></i>
@@ -107,6 +107,7 @@
 
         OSM.view = undefined;
         OSM.playerMarker = undefined;
+        OSM.postMarkers = undefined;
         // HT: https://stackoverflow.com/questions/52136700/how-to-use-font-awesome-as-an-icon-in-leaflet-instead-of-marker
         OSM.iconPlayer = L.divIcon({
           html: "<i class='fa-solid fa-street-view fa-3x text-dark'></i>",
@@ -118,7 +119,21 @@
         });
 
         Data.coords = undefined;
-        Data.posts = [];
+        Data.posts = undefined;
+
+        function loadPosts() {
+          Data.posts = JSON.parse(localStorage.getItem("posts-array")) || [];
+        }
+
+        function savePosts() {
+          localStorage.setItem("posts-array", JSON.stringify(Data.posts));
+        }
+
+        function clearPosts() {
+          if (OSM.postMarkers) OSM.postMarkers.clearLayers();
+          Data.posts = [];
+          savePosts();
+        }
 
         function bindLocation() {
           // early return if the browser does not support geolocation
@@ -132,6 +147,7 @@
               // bind the map and player on first run
               if (!OSM.view) {
                 bindMap();
+                bindPostLayer();
                 bindPlayer();
               }
               updateLocation();
@@ -168,6 +184,30 @@
           ).addTo(OSM.view);
         }
 
+        function bindPostLayer() {
+          OSM.postMarkers = L.layerGroup([]).addTo(OSM.view);
+          for (var i = 0; i < Data.posts.length; i++) {
+            bindPost(Data.posts[i]);
+          }
+        }
+
+        function bindPost(post) {
+          var layer = L.marker([post.latitude, post.longitude], {
+            icon: OSM.iconPost,
+          }).bindPopup(
+            "<strong>" +
+              post.title +
+              "</strong><br>" +
+              "[" +
+              post.latitude +
+              ", " +
+              post.longitude +
+              "]"
+          );
+          // render the post on the map
+          OSM.postMarkers.addLayer(layer);
+        }
+
         function updateLocation() {
           // render the player at an updated location
           OSM.playerMarker.setLatLng([
@@ -178,8 +218,6 @@
 
         function createPost(event) {
           event.preventDefault();
-
-          console.log("here");
 
           // create a new post
           var post = {
@@ -192,24 +230,11 @@
           var defaultTitle = "Post " + Date.now();
           post.title = prompt("Sign post name", defaultTitle) || defaultTitle;
 
-          // preserve the post in memory
+          // preserve the post in memory and save them
           Data.posts.push(post);
+          savePosts();
 
-          // render the post on the map
-          L.marker([post.latitude, post.longitude], {
-            icon: OSM.iconPost,
-          })
-            .addTo(OSM.view)
-            .bindPopup(
-              "<strong>" +
-                post.title +
-                "</strong><br>" +
-                "[" +
-                post.latitude +
-                ", " +
-                post.longitude +
-                "]"
-            );
+          bindPost(post);
         }
 
         function printPosts(event) {
@@ -221,6 +246,7 @@
           // !WARNING! binding location also binds the map and player
           // bind a location watcher to the window
           bindLocation();
+          loadPosts();
 
           DOM.post.addEventListener("click", createPost);
           DOM.print.addEventListener("click", printPosts);
